@@ -1,0 +1,105 @@
+model:
+  base_learning_rate: 2.0e-06
+  target: ldm.models.diffusion.ddpm_concat.LatentDiffusion
+  params:
+    linear_start: 0.0015
+    linear_end: 0.0195
+    num_timesteps_cond: 1
+    log_every_t: 200
+    timesteps: 1000
+    first_stage_key: image
+    conditioning_key: crossattn
+    cond_stage_key: concat_dual
+    image_size: 16
+    channels: 16
+    monitor: val/loss_simple_ema
+    parameterization: "eps"
+    unet_config:
+      target: ldm.modules.diffusionmodules.openaimodel.UNetModel
+      params:
+        image_size: 16
+        in_channels: 32
+        out_channels: 16
+        model_channels: 224
+        attention_resolutions:
+        # note: this isn\t actually the resolution but
+        # the downsampling factor, i.e. this corresnponds to
+        # attention on spatial resolution 8,16,32, as the
+        # spatial reolution of the latents is 64 for f4
+        - 8
+        - 4
+        - 2
+        num_res_blocks: 2
+        channel_mult:
+        - 1
+        - 2
+        - 3
+        - 4
+        num_head_channels: 32
+        use_spatial_transformer: true
+        transformer_depth: 1
+        context_dim: 128
+
+    first_stage_config:
+      target: ldm.models.autoencoder.AutoencoderKL
+      params:
+        embed_dim: 16
+        monitor: "val/rec_loss"
+        ckpt_path: "/data/engs2456/server_stuff/latent-diffusion/logs/2023-02-09T20-15-35_autoencoder_kl_16x16x16_heart/checkpoints/epoch=000417.ckpt"
+        ddconfig:
+          double_z: True
+          z_channels: 16
+          resolution: 256
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult: [ 1,1,2,2,4 ]  # num_down = len(ch_mult)-1
+          num_res_blocks: 2
+          attn_resolutions: [16]
+          dropout: 0.0
+        lossconfig:
+          target: torch.nn.Identity
+    cond_stage_config:
+      target: ldm.modules.encoders.modules.ClassEmbedder
+      # .ClassEmbedder
+      params:
+          #  embed_dim: 128
+          #  keys: ['image','class_label']
+           key: 'class_label'
+           n_classes: 5
+           embed_dim: 128
+
+
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 64
+    num_workers: 4
+    wrap: false
+    train:
+      target: ldm.data.heartdata.HeartData
+      params:
+        dfp : "heartdata/train_df_without_situs.csv"
+        image_size: [256,256]
+        data_len: 5000
+    validation:
+      target: ldm.data.heartdata.HeartData
+      
+      params:
+        dfp : "heartdata/valid_df_without_situs.csv"
+        image_size: [256,256]
+        data_len: 500
+
+
+lightning:
+  callbacks:
+    image_logger:
+      target: main.ImageLogger
+      params:
+        batch_frequency: 80
+        max_images: 8
+        increase_log_steps: False
+
+  trainer:
+    benchmark: True

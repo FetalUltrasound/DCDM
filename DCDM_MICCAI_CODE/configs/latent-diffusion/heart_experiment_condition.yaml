@@ -1,0 +1,76 @@
+model:
+  base_learning_rate: 2.0e-06
+  target: ldm.models.diffusion.ddpm.LatentDiffusion
+  params:
+    linear_start: 0.0015
+    linear_end: 0.0195
+    num_timesteps_cond: 1
+    log_every_t: 200
+    timesteps: 1000
+    first_stage_key: image
+    conditioning_key: concat
+    cond_stage_key: cond_image
+    image_size: 64
+    channels: 1
+    monitor: val/loss_simple_ema
+    parameterization: "eps"
+    unet_config:
+      target: ldm.modules.diffusionmodules.openaimodel.UNetModel
+      params:
+        image_size: 64
+        in_channels: 1
+        out_channels: 1
+        model_channels: 224
+        attention_resolutions:
+        # note: this isn\t actually the resolution but
+        # the downsampling factor, i.e. this corresnponds to
+        # attention on spatial resolution 8,16,32, as the
+        # spatial reolution of the latents is 64 for f4
+        - 8
+        - 4
+        - 2
+        num_res_blocks: 2
+        channel_mult:
+        - 1
+        - 2
+        - 3
+        - 4
+        num_head_channels: 32
+
+    first_stage_config:
+      target: ldm.models.autoencoder.IdentityFirstStage
+    cond_stage_config:
+      target: ldm.modules.encoders.modules.ReturnImage
+      key: cond_image
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 6
+    num_workers: 5
+    wrap: false
+    train:
+      target: ldm.data.heartdata.HeartData
+      params:
+        dfp : "/home/engs2456/Documents/work/DPHIL/occ/Palette-Image-to-Image-Diffusion-Models/heartdata/train_df_without_situs.csv"
+        image_size: [64,64]
+        data_len: 5000
+    validation:
+      target: ldm.data.heartdata.HeartData
+      
+      params:
+        dfp : "/home/engs2456/Documents/work/DPHIL/occ/Palette-Image-to-Image-Diffusion-Models/heartdata/valid_df_without_situs.csv"
+        image_size: [64,64]
+        data_len: 500
+
+
+lightning:
+  callbacks:
+    image_logger:
+      target: main.ImageLogger
+      params:
+        batch_frequency: 300
+        max_images: 8
+        increase_log_steps: False
+
+  trainer:
+    benchmark: True
